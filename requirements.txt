@@ -1,0 +1,10 @@
+streamlit
+pandas
+numpy
+numpy-financial
+plotly
+requests
+xlsxwriter
+jinja2
+pdfkit
+openpyxl
