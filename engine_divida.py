@@ -184,13 +184,24 @@ def simular_contrato(row, cenario: CenarioMercado):
             }
         )
 
+
     df = pd.DataFrame(pagamentos)
 
     fluxo_fin = [-valor * cambio] + df["Pagamento"].tolist()
     tir = calcular_tir(fluxo_fin, periodicidade)
-    vpl = calcular_vpl(fluxo_fin, taxa_base, periodicidade)
+
+    # 🔹 VPL sempre descontado a CDI (modo mensal)
+    taxa_cdi_desconto = pegar_cdi()  # taxa anual CDI
+    vpl = calcular_vpl(fluxo_fin, taxa_cdi_desconto, periodicidade)
 
     return df, tir, vpl
+
+
+
+
+
+
+
 
 
 # =========================
@@ -301,6 +312,7 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
 
     # 🔹 VPL sempre descontado a CDI
     taxa_cdi_desconto = pegar_cdi()          # taxa anual CDI
-    vpl = calcular_vpl(fluxo_fin, taxa_cdi_desconto)
+    vpl = calcular_vpl(fluxo_fin, taxa_cdi_desconto, periodicidade)
 
     return df, tir, vpl
+
