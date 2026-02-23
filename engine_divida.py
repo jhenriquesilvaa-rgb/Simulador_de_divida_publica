@@ -291,11 +291,16 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
             }
         )
 
+
+
     df = pd.DataFrame(pagamentos)
 
+    # 🔹 Fluxo financeiro para TIR (CET real)
     fluxo_fin = [-valor * cambio] + df["Pagamento"].tolist()
-    # periodicidade_meses = 6 para semestral
     tir = calcular_tir(fluxo_fin, periodicidade)
-    vpl = calcular_vpl(fluxo_fin, taxa_base, periodicidade)
+
+    # 🔹 VPL sempre descontado a CDI
+    taxa_cdi_desconto = pegar_cdi()          # taxa anual CDI
+    vpl = calcular_vpl(fluxo_fin, taxa_cdi_desconto)
 
     return df, tir, vpl
