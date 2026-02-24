@@ -72,7 +72,8 @@ if arquivo is None:
     st.stop()
 
 try:
-    contratos = pd.read_excel(arquivo)
+    contratos = pd.read_excel(arquivo, engine="openpyxl")
+
 except Exception as e:
     st.error(f"Erro ao ler a planilha: {e}")
     st.stop()
@@ -502,4 +503,5 @@ with col_exp1:
                     "vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 ),
             )
+
 
