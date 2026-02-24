@@ -37,26 +37,32 @@ def taxa_ao_dia_util(taxa_anual: float, dias_uteis_ano: int = 252) -> float:
     return (1 + taxa_anual) ** (1 / dias_uteis_ano) - 1
 
 
-def fator_periodo_dias_uteis(taxa_dia_util: float, data_inicio, data_fim, feriados=None) -> float:
+def fator_periodo_dias_uteis(taxa_dia_util: float, data_inicio, data_fim, feriados=None) -> tuple[float, int, int]:
     """
     Calcula a taxa efetiva do período com base no número de dias úteis
     entre data_inicio (inclusive) e data_fim (exclusive).
     Exclui sábados, domingos e feriados ANBIMA.
+
+    Retorna (taxa_periodo, dias_corridos, dias_uteis).
     """
     if feriados is None:
         feriados = []
 
     dias = pd.date_range(start=data_inicio, end=data_fim, freq="D")[:-1]
-    dias_uteis = dias[dias.weekday < 5]
+    dias_corridos = len(dias)
+    dias_uteis_lista = dias[dias.weekday < 5]
 
     if feriados:
         feriados_set = set(feriados)
-        dias_uteis = [d for d in dias_uteis if d.date() not in feriados_set]
+        dias_uteis_lista = [d for d in dias_uteis_lista if d.date() not in feriados_set]
 
-    n = len(dias_uteis)
-    if n <= 0:
-        return 0.0
-    return (1 + taxa_dia_util) ** n - 1
+    dias_uteis = len(dias_uteis_lista)
+
+    if dias_uteis <= 0:
+        return 0.0, dias_corridos, dias_uteis
+
+    taxa_periodo = (1 + taxa_dia_util) ** dias_uteis - 1
+    return taxa_periodo, dias_corridos, dias_uteis
 
 
 def periodo_para_anual_dias_uteis(taxa_periodo: float, dias_uteis_periodo: int, dias_uteis_ano: int = 252) -> float:
@@ -67,6 +73,26 @@ def periodo_para_anual_dias_uteis(taxa_periodo: float, dias_uteis_periodo: int, 
     if taxa_periodo <= -1 or dias_uteis_periodo <= 0:
         return 0.0
     return (1 + taxa_periodo) ** (dias_uteis_ano / dias_uteis_periodo) - 1
+
+
+# =========================
+# 🔹 Datas semestrais 15/05 e 15/11
+# =========================
+
+def gerar_datas_semestrais_convecao_anbima(ano_inicial: int, prazo: int) -> pd.DatetimeIndex:
+    """
+    Gera 'prazo' datas semestrais:
+    15/05 e 15/11 a partir do ano_inicial.
+    """
+    ano = ano_inicial
+    datas = []
+    while len(datas) < prazo:
+        datas.append(pd.Timestamp(year=ano, month=5, day=15))
+        if len(datas) >= prazo:
+            break
+        datas.append(pd.Timestamp(year=ano, month=11, day=15))
+        ano += 1
+    return pd.to_datetime(datas[:prazo])
 
 
 # =========================
@@ -152,7 +178,7 @@ def simular_contrato(row, cenario: CenarioMercado):
     Simula o fluxo de um contrato de dívida.
 
     Convenções:
-    - Se Periodicidade = 1 → períodos mensais (dia útil ANBIMA entre pagamentos).
+    - Se Periodicidade = 1 → períodos mensais (juros pró‑rata dia útil ANBIMA).
     - Se Periodicidade = 6 → encaminha para simulação semestral.
     """
 
@@ -184,21 +210,25 @@ def simular_contrato(row, cenario: CenarioMercado):
     saldo = valor
     pagamentos = []
 
-    # Datas de pagamento mensais (início de mês)
+    # Datas de pagamento mensais preservando o dia da contratação
+    data_ini = pd.to_datetime(row["Data_contratação"])
+    dia = data_ini.day
     datas = pd.date_range(
-        start=pd.to_datetime(row["Data_contratação"]),
+        start=data_ini,
         periods=prazo,
-        freq="MS",  # mensal
+        freq="M",
     )
+    datas = datas.map(lambda d: d.replace(day=dia))
 
     # Feriados ANBIMA no intervalo do contrato
-    data_inicio = datas[0].date()
+    data_inicio = data_ini.date()
     data_fim = datas[-1].date()
     feriados = get_feriados_intervalo(data_inicio, data_fim)
     feriados_set = set(feriados)
 
     # Estimar número médio de dias úteis entre pagamentos (para TIR anual)
-    datas_exemplo = pd.date_range(start=datas[0], periods=2, freq="MS")
+    datas_exemplo = pd.date_range(start=datas[0], periods=2, freq="M")
+    datas_exemplo = datas_exemplo.map(lambda d: d.replace(day=dia))
     dias_exemplo = pd.date_range(
         start=datas_exemplo[0],
         end=datas_exemplo[1],
@@ -218,13 +248,13 @@ def simular_contrato(row, cenario: CenarioMercado):
     elif sistema == "PRICE" and prazo <= carencia:
         pmt = None
 
-    data_anterior = datas[0]
+    data_anterior = data_ini
 
     for i in range(prazo):
         data_atual = datas[i]
 
         # Taxa efetiva do período com base em dias úteis ANBIMA
-        taxa_periodo_efetiva = fator_periodo_dias_uteis(
+        taxa_periodo_efetiva, dias_corridos, dias_uteis = fator_periodo_dias_uteis(
             taxa_dia_util,
             data_anterior,
             data_atual,
@@ -262,6 +292,8 @@ def simular_contrato(row, cenario: CenarioMercado):
                 "Amortização": amort * cambio,
                 "Juros": juros * cambio,
                 "Saldo_Devedor": saldo * cambio,
+                "Dias_corridos": dias_corridos,
+                "Dias_uteis_252": dias_uteis,
                 "Taxa_Dia_Util": taxa_dia_util * 100,
                 "Taxa_Anual": taxa_anual * 100,
                 "Indexador": row["Indexador"],
@@ -328,12 +360,9 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     saldo = valor
     pagamentos = []
 
-    # Datas semestrais: a cada 6 meses
-    datas = pd.date_range(
-        start=pd.to_datetime(row["Data_contratação"]),
-        periods=prazo,
-        freq="6MS",  # início de mês, a cada 6 meses
-    )
+    # Datas semestrais: 15/05 e 15/11
+    ano_inicial = pd.to_datetime(row["Data_contratação"]).year
+    datas = gerar_datas_semestrais_convecao_anbima(ano_inicial, prazo)
 
     # Feriados ANBIMA no intervalo
     data_inicio = datas[0].date()
@@ -342,7 +371,7 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     feriados_set = set(feriados)
 
     # Número médio de dias úteis entre dois pagamentos semestrais
-    datas_exemplo = pd.date_range(start=datas[0], periods=2, freq="6MS")
+    datas_exemplo = gerar_datas_semestrais_convecao_anbima(ano_inicial, 2)
     dias_exemplo = pd.date_range(
         start=datas_exemplo[0],
         end=datas_exemplo[1],
@@ -368,7 +397,7 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     for i in range(prazo):
         data_atual = datas[i]
 
-        taxa_periodo_efetiva = fator_periodo_dias_uteis(
+        taxa_periodo_efetiva, dias_corridos, dias_uteis = fator_periodo_dias_uteis(
             taxa_dia_util,
             data_anterior,
             data_atual,
@@ -405,6 +434,8 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
                 "Amortização": amort * cambio,
                 "Juros": juros * cambio,
                 "Saldo_Devedor": saldo * cambio,
+                "Dias_corridos": dias_corridos,
+                "Dias_uteis_252": dias_uteis,
                 "Taxa_Dia_Util": taxa_dia_util * 100,
                 "Taxa_Anual": taxa_anual * 100,
                 "Indexador": row["Indexador"],
@@ -428,3 +459,5 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     vpl = calcular_vpl(fluxo_fin, taxa_cdi_desconto, periodicidade)
 
     return df, tir, vpl
+
+
