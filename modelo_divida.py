@@ -33,7 +33,7 @@ def rodar_modelo(
         cenario = CenarioMercado(nome="Base")
 
     if df is None:
-        df = pd.read_excel("Contratos.xlsx")
+        df = pd.read_excel("Contratos.xlsx", engine="openpyxl")
 
     df = _normalizar_colunas(df)
 
@@ -216,4 +216,5 @@ def rodar_modelo(
     ranking = ranking.sort_values(by="Custo_Total", ascending=False)
 
     return resumo, fluxo, carteira, fluxo_anual, fluxo_mensal, ranking
+
 
