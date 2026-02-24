@@ -33,7 +33,6 @@ def taxa_ao_dia_util(taxa_anual: float, dias_uteis_ano: int = 252) -> float:
     """
     Converte taxa efetiva anual em taxa efetiva por dia útil.
     Ex.: CDI a.a. -> CDI diário base 252.
-    (Aqui ainda usamos a conversão exponencial.)
     """
     return (1 + taxa_anual) ** (1 / dias_uteis_ano) - 1
 
@@ -213,18 +212,17 @@ def simular_contrato(row, cenario: CenarioMercado):
     pagamentos = []
 
     # =========================
-    # Datas: contratação (para agendar pagamentos) vs liberação (para juros)
+    # Datas: contratação (pagamentos) vs liberação (início dos juros)
     # =========================
     data_contrat = pd.to_datetime(row["Data_contratação"])
     data_liber = pd.to_datetime(row["Data_liberacao"])
-
     dia_pag = data_contrat.day
 
-    # Datas de pagamento mensais: sempre no mesmo dia da contratação, começando no mês seguinte
+    # Datas de pagamento mensais: sempre no mesmo dia da contratação,
+    # começando no mês seguinte
     datas = []
     for k in range(1, prazo + 1):
         d = data_contrat + pd.DateOffset(months=k)
-        # se o mês não tiver esse dia (ex.: 30/02), cai para o último dia do mês
         ultimo_dia_mes = (d + pd.offsets.MonthEnd(0)).day
         d = d.replace(day=min(dia_pag, ultimo_dia_mes))
         datas.append(d)
@@ -250,7 +248,7 @@ def simular_contrato(row, cenario: CenarioMercado):
     ]
     dias_uteis_entre_pagamentos = len(dias_uteis_exemplo)
 
-    # PRICE: calcular prestação aproximada usando taxa por período derivada dos dias úteis médios
+    # PRICE: prestação aproximada com base na taxa por período média
     pmt = None
     if sistema == "PRICE" and prazo > carencia:
         taxa_periodo_aprox = (1 + taxa_dia_util) ** dias_uteis_entre_pagamentos - 1
@@ -258,7 +256,7 @@ def simular_contrato(row, cenario: CenarioMercado):
     elif sistema == "PRICE" and prazo <= carencia:
         pmt = None
 
-    # Primeiro período começa na data de liberação
+    # Primeiro período: da Data_liberacao até o primeiro pagamento
     data_anterior = data_liber
 
     for i in range(prazo):
@@ -470,7 +468,6 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     vpl = calcular_vpl(fluxo_fin, taxa_cdi_desconto, periodicidade)
 
     return df, tir, vpl
-
 
 
 
