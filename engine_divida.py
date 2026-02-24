@@ -210,15 +210,20 @@ def simular_contrato(row, cenario: CenarioMercado):
     saldo = valor
     pagamentos = []
 
-    # Datas de pagamento mensais preservando o dia da contratação
+  
+    # Datas de pagamento mensais: sempre no mesmo dia, começando no mês seguinte
     data_ini = pd.to_datetime(row["Data_contratação"])
     dia = data_ini.day
-    datas = pd.date_range(
-        start=data_ini,
-        periods=prazo,
-        freq="M",
-    )
-    datas = datas.map(lambda d: d.replace(day=dia))
+
+    datas = []
+    for k in range(1, prazo + 1):
+    d = data_ini + pd.DateOffset(months=k)
+    # se o mês não tiver esse dia (ex.: 30/02), cai para o último dia do mês
+    ultimo_dia_mes = (d + pd.offsets.MonthEnd(0)).day
+    d = d.replace(day=min(dia, ultimo_dia_mes))
+    datas.append(d)
+    datas = pd.to_datetime(datas)
+
 
     # Feriados ANBIMA no intervalo do contrato
     data_inicio = data_ini.date()
@@ -459,5 +464,6 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     vpl = calcular_vpl(fluxo_fin, taxa_cdi_desconto, periodicidade)
 
     return df, tir, vpl
+
 
 
