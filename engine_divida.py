@@ -368,7 +368,7 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     sistema = str(row["Sistema_Amortização"]).upper()
     moeda = str(row["Moeda"]).upper()
 
-        spread = float(row["Spread"] or 0.0)
+    spread = float(row["Spread"] or 0.0)
     fator = float(row["Fator_indexador"] or 1.0)
 
     # CDI (ou outro indexador) em base anual
@@ -491,6 +491,7 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     vpl = calcular_vpl(fluxo_fin, taxa_cdi_desconto, periodicidade)
 
     return df, tir, vpl
+
 
 
 
