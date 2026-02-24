@@ -194,15 +194,24 @@ def simular_contrato(row, cenario: CenarioMercado):
     if periodicidade == 6:
         return simular_contrato_semestral(row, cenario)
 
+
     # Modo padrão (mensal)
     spread = float(row["Spread"] or 0.0)
     fator = float(row["Fator_indexador"] or 1.0)
 
-    taxa_base = taxa_indexador(row, cenario)
-    taxa_anual = taxa_base * fator + spread + (cenario.choque_spread_bps / 10000.0)
+    # CDI (ou outro indexador) em base anual
+    taxa_base = taxa_indexador(row, cenario)            # ex.: CDI
+    taxa_cdi_anual = taxa_base * fator                  # componente indexador
+    taxa_spread_anual = spread + (cenario.choque_spread_bps / 10000.0)
 
-    # Taxa diária em dias úteis
-    taxa_dia_util = taxa_ao_dia_util(taxa_anual, dias_uteis_ano=252)
+    # Diarização separada, como na planilha:
+    # =((1+CDI)^(1/252))*((1+spread)^(1/252))-1
+    taxa_cdi_dia = (1 + taxa_cdi_anual) ** (1 / 252) - 1
+    taxa_spread_dia = (1 + taxa_spread_anual) ** (1 / 252) - 1
+    taxa_dia_util = (1 + taxa_cdi_dia) * (1 + taxa_spread_dia) - 1
+
+    # Taxa anual equivalente apenas para exibição na auditoria
+    taxa_anual = (1 + taxa_dia_util) ** 252 - 1
 
     cambio = pegar_cambio(moeda) if moeda != "BRL" else 1.0
     if cenario.choque_cambio_pct != 0.0 and moeda != "BRL":
@@ -210,6 +219,12 @@ def simular_contrato(row, cenario: CenarioMercado):
 
     saldo = valor
     pagamentos = []
+
+
+
+
+
+    
 
     # =========================
     # Datas: contratação (pagamentos) vs liberação (início dos juros)
@@ -353,14 +368,22 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     sistema = str(row["Sistema_Amortização"]).upper()
     moeda = str(row["Moeda"]).upper()
 
-    spread = float(row["Spread"] or 0.0)
+        spread = float(row["Spread"] or 0.0)
     fator = float(row["Fator_indexador"] or 1.0)
 
+    # CDI (ou outro indexador) em base anual
     taxa_base = taxa_indexador(row, cenario)
-    taxa_anual = taxa_base * fator + spread + (cenario.choque_spread_bps / 10000.0)
+    taxa_cdi_anual = taxa_base * fator
+    taxa_spread_anual = spread + (cenario.choque_spread_bps / 10000.0)
 
-    # Taxa diária em dias úteis
-    taxa_dia_util = taxa_ao_dia_util(taxa_anual, dias_uteis_ano=252)
+    # Diarização separada (mesma fórmula da planilha)
+    taxa_cdi_dia = (1 + taxa_cdi_anual) ** (1 / 252) - 1
+    taxa_spread_dia = (1 + taxa_spread_anual) ** (1 / 252) - 1
+    taxa_dia_util = (1 + taxa_cdi_dia) * (1 + taxa_spread_dia) - 1
+
+    # Taxa anual equivalente só para exibição
+    taxa_anual = (1 + taxa_dia_util) ** 252 - 1
+
 
     cambio = pegar_cambio(moeda) if moeda != "BRL" else 1.0
     if cenario.choque_cambio_pct != 0.0 and moeda != "BRL":
@@ -468,6 +491,7 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     vpl = calcular_vpl(fluxo_fin, taxa_cdi_desconto, periodicidade)
 
     return df, tir, vpl
+
 
 
 
