@@ -217,11 +217,11 @@ def simular_contrato(row, cenario: CenarioMercado):
 
     datas = []
     for k in range(1, prazo + 1):
-    d = data_ini + pd.DateOffset(months=k)
-    # se o mês não tiver esse dia (ex.: 30/02), cai para o último dia do mês
-    ultimo_dia_mes = (d + pd.offsets.MonthEnd(0)).day
-    d = d.replace(day=min(dia, ultimo_dia_mes))
-    datas.append(d)
+        d = data_ini + pd.DateOffset(months=k)
+        # se o mês não tiver esse dia (ex.: 30/02), cai para o último dia do mês
+        ultimo_dia_mes = (d + pd.offsets.MonthEnd(0)).day
+        d = d.replace(day=min(dia, ultimo_dia_mes))
+        datas.append(d)
     datas = pd.to_datetime(datas)
 
 
@@ -464,6 +464,7 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     vpl = calcular_vpl(fluxo_fin, taxa_cdi_desconto, periodicidade)
 
     return df, tir, vpl
+
 
 
 
