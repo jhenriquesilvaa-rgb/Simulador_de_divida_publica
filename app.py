@@ -430,18 +430,25 @@ if resumo is not None and not resumo.empty:
                         f"{safe_percent(fluxo_ind['Taxa_Periodo'].iloc[0])}"
                     )
 
+        
+
                 st.subheader("Tabela de Auditoria do Fluxo")
 
                 colunas_auditoria = [
                     "Data", "Pagamento", "Amortização",
                     "Juros", "Saldo_Devedor",
-                    "Taxa_Periodo", "Taxa_Anual",
+                    "Dias_corridos", "Dias_uteis_252",
+                    "Taxa_Dia_Util", "Taxa_Anual",
                 ]
                 cols_existentes = [
                     c for c in colunas_auditoria if c in fluxo_ind.columns
                 ]
 
                 df_aud = fluxo_ind[cols_existentes].copy()
+
+
+
+                
 
                 for c in ["Pagamento", "Amortização", "Juros", "Saldo_Devedor"]:
                     if c in df_aud.columns:
@@ -503,5 +510,6 @@ with col_exp1:
                     "vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 ),
             )
+
 
 
