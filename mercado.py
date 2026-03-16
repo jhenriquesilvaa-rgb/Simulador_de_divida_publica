@@ -121,7 +121,7 @@ def pegar_cdi() -> float:
     e um piso de segurança para evitar valores quase zero.
     """
     # Ajuste aqui o fallback conforme o CDI corrente (ex.: 0.14 = 14% a.a.)
-    return pegar_serie_bacen(12, 0.145)
+    return pegar_serie_bacen(12, 0.149)
 
 
 def pegar_ipca() -> float:
