@@ -6,7 +6,6 @@ from mercado import pegar_cdi, pegar_ipca, pegar_cambio, pegar_selic, pegar_sofr
 from cenarios import CenarioMercado
 from feriados_anbima import get_feriados_intervalo
 
-
 # =========================
 # 🔹 Conversões de taxa
 # =========================
@@ -103,6 +102,8 @@ def taxa_indexador(row, cenario: CenarioMercado) -> float:
     """
     Retorna taxa efetiva anual do indexador de referência,
     já incluindo choques de cenário (em bps).
+
+    Para PREFIXADO, retorna 0.0 (toda a taxa vem do Spread).
     """
     indexador = str(row["Indexador"]).upper()
 
@@ -118,6 +119,9 @@ def taxa_indexador(row, cenario: CenarioMercado) -> float:
     elif indexador == "SOFR":
         base = pegar_sofr()
     elif indexador == "VARIAÇÃO CAMBIAL":
+        base = 0.0
+    elif indexador == "PREFIXADO":
+        # Prefixado puro: componente indexador é zero; taxa vem só do spread
         base = 0.0
     else:
         base = 0.0
@@ -194,15 +198,21 @@ def simular_contrato(row, cenario: CenarioMercado):
     if periodicidade == 6:
         return simular_contrato_semestral(row, cenario)
 
-
     # Modo padrão (mensal)
     spread = float(row["Spread"] or 0.0)
     fator = float(row["Fator_indexador"] or 1.0)
 
-    # CDI (ou outro indexador) em base anual
-    taxa_base = taxa_indexador(row, cenario)            # ex.: CDI
-    taxa_cdi_anual = taxa_base * fator                  # componente indexador
-    taxa_spread_anual = spread + (cenario.choque_spread_bps / 10000.0)
+    indexador = str(row["Indexador"]).upper()
+    taxa_base = taxa_indexador(row, cenario)  # ex.: CDI
+
+    if indexador == "PREFIXADO":
+        # Spread já é a taxa fixa anual total
+        taxa_cdi_anual = 0.0
+        taxa_spread_anual = spread + (cenario.choque_spread_bps / 10000.0)
+    else:
+        # CDI/IPCA/... * fator + spread
+        taxa_cdi_anual = taxa_base * fator
+        taxa_spread_anual = spread + (cenario.choque_spread_bps / 10000.0)
 
     # Diarização separada, como na planilha:
     # =((1+CDI)^(1/252))*((1+spread)^(1/252))-1
@@ -219,12 +229,6 @@ def simular_contrato(row, cenario: CenarioMercado):
 
     saldo = valor
     pagamentos = []
-
-
-
-
-
-    
 
     # =========================
     # Datas: contratação (pagamentos) vs liberação (início dos juros)
@@ -362,8 +366,8 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     """
 
     valor = float(row["Valor_Contratado"])
-    prazo = int(row["Prazo"])              # em semestres
-    carencia = int(row["Carencia"])        # em semestres
+    prazo = int(row["Prazo"])  # em semestres
+    carencia = int(row["Carencia"])  # em semestres
     periodicidade = int(row["Periodicidade"])  # deve ser 6 aqui
     sistema = str(row["Sistema_Amortização"]).upper()
     moeda = str(row["Moeda"]).upper()
@@ -371,10 +375,15 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     spread = float(row["Spread"] or 0.0)
     fator = float(row["Fator_indexador"] or 1.0)
 
-    # CDI (ou outro indexador) em base anual
+    indexador = str(row["Indexador"]).upper()
     taxa_base = taxa_indexador(row, cenario)
-    taxa_cdi_anual = taxa_base * fator
-    taxa_spread_anual = spread + (cenario.choque_spread_bps / 10000.0)
+
+    if indexador == "PREFIXADO":
+        taxa_cdi_anual = 0.0
+        taxa_spread_anual = spread + (cenario.choque_spread_bps / 10000.0)
+    else:
+        taxa_cdi_anual = taxa_base * fator
+        taxa_spread_anual = spread + (cenario.choque_spread_bps / 10000.0)
 
     # Diarização separada (mesma fórmula da planilha)
     taxa_cdi_dia = (1 + taxa_cdi_anual) ** (1 / 252) - 1
@@ -383,7 +392,6 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
 
     # Taxa anual equivalente só para exibição
     taxa_anual = (1 + taxa_dia_util) ** 252 - 1
-
 
     cambio = pegar_cambio(moeda) if moeda != "BRL" else 1.0
     if cenario.choque_cambio_pct != 0.0 and moeda != "BRL":
@@ -491,6 +499,7 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     vpl = calcular_vpl(fluxo_fin, taxa_cdi_desconto, periodicidade)
 
     return df, tir, vpl
+
 
 
 
