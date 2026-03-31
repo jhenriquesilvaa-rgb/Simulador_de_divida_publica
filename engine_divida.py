@@ -102,8 +102,6 @@ def taxa_indexador(row, cenario: CenarioMercado) -> float:
     """
     Retorna taxa efetiva anual do indexador de referência,
     já incluindo choques de cenário (em bps).
-
-    Para PREFIXADO, retorna 0.0 (toda a taxa vem do Spread).
     """
     indexador = str(row["Indexador"]).upper()
 
@@ -119,9 +117,6 @@ def taxa_indexador(row, cenario: CenarioMercado) -> float:
     elif indexador == "SOFR":
         base = pegar_sofr()
     elif indexador == "VARIAÇÃO CAMBIAL":
-        base = 0.0
-    elif indexador == "PREFIXADO":
-        # Prefixado puro: componente indexador é zero; taxa vem só do spread
         base = 0.0
     else:
         base = 0.0
@@ -202,17 +197,10 @@ def simular_contrato(row, cenario: CenarioMercado):
     spread = float(row["Spread"] or 0.0)
     fator = float(row["Fator_indexador"] or 1.0)
 
-    indexador = str(row["Indexador"]).upper()
+    # CDI (ou outro indexador) em base anual
     taxa_base = taxa_indexador(row, cenario)  # ex.: CDI
-
-    if indexador == "PREFIXADO":
-        # Spread já é a taxa fixa anual total
-        taxa_cdi_anual = 0.0
-        taxa_spread_anual = spread + (cenario.choque_spread_bps / 10000.0)
-    else:
-        # CDI/IPCA/... * fator + spread
-        taxa_cdi_anual = taxa_base * fator
-        taxa_spread_anual = spread + (cenario.choque_spread_bps / 10000.0)
+    taxa_cdi_anual = taxa_base * fator  # componente indexador
+    taxa_spread_anual = spread + (cenario.choque_spread_bps / 10000.0)
 
     # Diarização separada, como na planilha:
     # =((1+CDI)^(1/252))*((1+spread)^(1/252))-1
@@ -375,15 +363,10 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     spread = float(row["Spread"] or 0.0)
     fator = float(row["Fator_indexador"] or 1.0)
 
-    indexador = str(row["Indexador"]).upper()
+    # CDI (ou outro indexador) em base anual
     taxa_base = taxa_indexador(row, cenario)
-
-    if indexador == "PREFIXADO":
-        taxa_cdi_anual = 0.0
-        taxa_spread_anual = spread + (cenario.choque_spread_bps / 10000.0)
-    else:
-        taxa_cdi_anual = taxa_base * fator
-        taxa_spread_anual = spread + (cenario.choque_spread_bps / 10000.0)
+    taxa_cdi_anual = taxa_base * fator
+    taxa_spread_anual = spread + (cenario.choque_spread_bps / 10000.0)
 
     # Diarização separada (mesma fórmula da planilha)
     taxa_cdi_dia = (1 + taxa_cdi_anual) ** (1 / 252) - 1
@@ -400,18 +383,37 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     saldo = valor
     pagamentos = []
 
-    # Datas semestrais: 15/05 e 15/11
-    ano_inicial = pd.to_datetime(row["Data_contratação"]).year
-    datas = gerar_datas_semestrais_convecao_anbima(ano_inicial, prazo)
+    # Datas de pagamento semestrais
+    data_contrat = pd.to_datetime(row["Data_contratação"])
+    data_liber = pd.to_datetime(row["Data_liberacao"])
+
+    if moeda == "BRL":
+        # Dívida interna: semestres a partir da Data_liberacao
+        datas = []
+        dia_pag = data_liber.day
+        for k in range(1, prazo + 1):
+            d = data_liber + pd.DateOffset(months=6 * k)
+            ultimo_dia_mes = (d + pd.offsets.MonthEnd(0)).day
+            d = d.replace(day=min(dia_pag, ultimo_dia_mes))
+            datas.append(d)
+        datas = pd.to_datetime(datas)
+    else:
+        # Dívida externa: convenção ANBIMA 15/05 e 15/11
+        ano_inicial = data_contrat.year
+        datas = gerar_datas_semestrais_convecao_anbima(ano_inicial, prazo)
 
     # Feriados ANBIMA no intervalo
-    data_inicio = datas[0].date()
+    data_inicio = min(data_liber.date(), datas[0].date())
     data_fim = datas[-1].date()
     feriados = get_feriados_intervalo(data_inicio, data_fim)
     feriados_set = set(feriados)
 
     # Número médio de dias úteis entre dois pagamentos semestrais
-    datas_exemplo = gerar_datas_semestrais_convecao_anbima(ano_inicial, 2)
+    if moeda == "BRL":
+        datas_exemplo = datas[:2]
+    else:
+        datas_exemplo = gerar_datas_semestrais_convecao_anbima(data_contrat.year, 2)
+
     dias_exemplo = pd.date_range(
         start=datas_exemplo[0],
         end=datas_exemplo[1],
@@ -499,11 +501,3 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     vpl = calcular_vpl(fluxo_fin, taxa_cdi_desconto, periodicidade)
 
     return df, tir, vpl
-
-
-
-
-
-
-
-
