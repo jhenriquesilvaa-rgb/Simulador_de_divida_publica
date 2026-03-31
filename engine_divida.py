@@ -434,7 +434,8 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     elif sistema == "PRICE" and prazo <= carencia:
         pmt = None
 
-    data_anterior = datas[0]
+    # Primeiro período: da Data_liberacao até o primeiro vencimento
+    data_anterior = data_liber
 
     for i in range(prazo):
         data_atual = datas[i]
