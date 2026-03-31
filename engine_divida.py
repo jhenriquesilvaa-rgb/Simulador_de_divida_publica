@@ -383,7 +383,7 @@ def simular_contrato_semestral(row, cenario: CenarioMercado):
     saldo = valor
     pagamentos = []
 
-    # Datas de pagamento semestrais
+    # Datas de pagamento semestrais: regra interna x externa
     data_contrat = pd.to_datetime(row["Data_contratação"])
     data_liber = pd.to_datetime(row["Data_liberacao"])
 
