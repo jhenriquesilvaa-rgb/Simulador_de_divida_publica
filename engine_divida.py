@@ -178,7 +178,7 @@ def simular_contrato(row, cenario: CenarioMercado):
 
     Convenções:
     - Se Periodicidade = 1 → períodos mensais (juros pró‑rata dia útil ANBIMA),
-      iniciando na Data_liberacao e pagando no dia da Data_contratação + k meses.
+      iniciando na Data_liberacao e pagando no mesmo dia de Data_liberacao + k meses.
     - Se Periodicidade = 6 → encaminha para simulação semestral.
     """
 
@@ -219,24 +219,23 @@ def simular_contrato(row, cenario: CenarioMercado):
     pagamentos = []
 
     # =========================
-    # Datas: contratação (pagamentos) vs liberação (início dos juros)
+    # Datas: liberação (início dos juros) e pagamentos mensais
     # =========================
     data_contrat = pd.to_datetime(row["Data_contratação"])
     data_liber = pd.to_datetime(row["Data_liberacao"])
-    dia_pag = data_contrat.day
 
-    # Datas de pagamento mensais: sempre no mesmo dia da contratação,
-    # começando no mês seguinte
+    # Regra nova: pagamentos mensais a partir da Data_liberacao
+    dia_pag = data_liber.day
     datas = []
     for k in range(1, prazo + 1):
-        d = data_contrat + pd.DateOffset(months=k)
+        d = data_liber + pd.DateOffset(months=k)
         ultimo_dia_mes = (d + pd.offsets.MonthEnd(0)).day
         d = d.replace(day=min(dia_pag, ultimo_dia_mes))
         datas.append(d)
     datas = pd.to_datetime(datas)
 
     # Feriados ANBIMA no intervalo do contrato
-    data_inicio = min(data_liber.date(), datas[0].date())
+    data_inicio = data_liber.date()
     data_fim = datas[-1].date()
     feriados = get_feriados_intervalo(data_inicio, data_fim)
     feriados_set = set(feriados)
