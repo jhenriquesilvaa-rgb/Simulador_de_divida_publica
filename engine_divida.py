@@ -241,7 +241,7 @@ def simular_contrato(row, cenario: CenarioMercado):
     feriados_set = set(feriados)
 
     # Estimar número médio de dias úteis entre pagamentos (para TIR anual)
-    datas_exemplo = pd.date_range(start=datas[0], periods=2, freq="M")
+    datas_exemplo = pd.date_range(start=datas[0], periods=2, freq="ME")
     datas_exemplo = datas_exemplo.map(lambda d: d.replace(day=dia_pag))
     dias_exemplo = pd.date_range(
         start=datas_exemplo[0],
